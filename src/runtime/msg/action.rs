@@ -57,6 +57,19 @@ pub enum ActionCtx {
         meta_item: MetaItemPreview,
         is_watched: bool,
     },
+    /// Updates playback progress for a meta item without relying on an active model context.
+    ///
+    /// Creates a temporary [`LibraryItem`] if one doesn't exist.
+    ///
+    /// [`LibraryItem`]: crate::types::library::LibraryItem
+    #[serde(rename_all = "camelCase")]
+    UpdateLibraryItemProgress {
+        meta_item: MetaItemPreview,
+        video_id: String,
+        time_offset: u64,
+        #[serde(default)]
+        duration: Option<u64>,
+    },
     /// If boolean is set to `true` it will disable notifications for the LibraryItem.
     ToggleLibraryItemNotifications(LibraryItemId, bool),
     /// Dismiss all Notification for a given [`MetaItemId`].

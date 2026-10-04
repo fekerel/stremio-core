@@ -164,6 +164,14 @@ pub fn update_library<E: Env + 'static>(
             library_item.mark_as_watched::<E>(*is_watched);
             Effects::msg(Msg::Internal(Internal::UpdateLibraryItem(library_item))).unchanged()
         }
+        Msg::Action(Action::Ctx(ActionCtx::UpdateLibraryItemProgress {
+            meta_item,
+            video_id,
+            time_offset,
+            duration,
+        })) => {
+            update_library_item_progress::<E>(library, meta_item, video_id, *time_offset, *duration)
+        }
         Msg::Internal(Internal::UpdateLibraryItem(library_item))
             if library
                 .items
@@ -306,6 +314,53 @@ pub fn update_library<E: Env + 'static>(
         },
         _ => Effects::none().unchanged(),
     }
+}
+
+fn update_library_item_progress<E: Env + 'static>(
+    library: &LibraryBucket,
+    meta_item: &crate::types::resource::MetaItemPreview,
+    video_id: &str,
+    time_offset: u64,
+    duration: Option<u64>,
+) -> Effects {
+    if time_offset == 0 {
+        return Effects::none().unchanged();
+    }
+
+    let mut library_item = match library.items.get(&meta_item.id) {
+        Some(library_item) => LibraryItem::from((meta_item, library_item)),
+        _ => LibraryItem::from((meta_item, PhantomData::<E>)),
+    };
+
+    library_item.state.last_watched = Some(E::now());
+
+    let same_video = library_item.state.video_id.as_deref() == Some(video_id);
+    let time_watched_delta = if same_video && library_item.state.duration > 0 {
+        time_offset.saturating_sub(library_item.state.time_offset)
+    } else {
+        0
+    };
+
+    if !same_video {
+        library_item.state.video_id = Some(video_id.to_owned());
+        library_item.state.time_watched = 0;
+        library_item.state.flagged_watched = 0;
+    }
+
+    library_item.state.time_offset = time_offset;
+    if let Some(duration) = duration.filter(|duration| *duration > 0) {
+        library_item.state.duration = duration;
+    }
+    library_item.state.time_watched = library_item
+        .state
+        .time_watched
+        .saturating_add(time_watched_delta);
+    library_item.state.overall_time_watched = library_item
+        .state
+        .overall_time_watched
+        .saturating_add(time_watched_delta);
+
+    Effects::msg(Msg::Internal(Internal::UpdateLibraryItem(library_item))).unchanged()
 }
 
 fn should_update_library_with_items(library: &LibraryBucket, items: &[LibraryItem]) -> bool {
